@@ -11,6 +11,17 @@ use pinocchio::{
 
 entrypoint!(process_instruction);
 
+// pub mod instructions;
+// pub use instructions::*;
+ 
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee, 
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7, 
+];
+
 fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -78,7 +89,7 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
         Ok(Self { amount })
     }
 }
-
+ 
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
     pub instruction_datas: DepositInstructionData,
@@ -136,7 +147,49 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
         return Err(ProgramError::InvalidAccountOwner);
     }
 
-    let (vault_key, bump) = find_program_address(&[b"vault"])
+    let (vault_key, bump) = find_program_address(&[b"vault", owner.key().as_ref()], &crate::ID);
+    if &vault_key != vault.key() {
+        return Err(ProgramError::InvalidAccountOwner);
+    }
+
+    Ok(Self { owner, vault, bumps: [bump] })
 
    }
+}
+
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a[AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+} 
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        
+        let seeds = {
+            Seed::from(b"vault"),
+            Seed::from(self.accounts.owner.key().as_ref()),
+            Seed::from(&self.accounts.bumps),
+        };
+        let signers = [Signer::from(&seeds)];
+
+        Transfer {
+            from: self.accounts.vault,
+            to: self.accounts.owner,
+            lamports: self.accounts.vault.lamports(),
+        }
+        .invoke_signed(&signers)?;
+
+         Ok(())
+    }
 }
