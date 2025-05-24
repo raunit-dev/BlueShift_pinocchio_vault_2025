@@ -1,6 +1,5 @@
 pub mod deposit;
-pub mod withdraw;
-
-
 pub use deposit::*;
+
+pub mod withdraw;
 pub use withdraw::*;
